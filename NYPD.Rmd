@@ -1,0 +1,86 @@
+---
+title: "NYPD Shooting Incident Data (Historic)"
+date: "2/7/2022"
+output:
+  pdf_document: default
+  html_document: default
+---
+## NYPD Shooting Incident Data (Historic)
+This is an R Markdown document about NYPD Shooting Incident Data from 2006 to 2020. I accessed data from  website: https://catalog.data.gov/dataset  and found the dataset titled NYPD Shooting Incident Data (Historic).
+
+### Step 1. Import the shooting project dataset in a reproducible manner
+```{r}
+library(tidyverse)
+library(lubridate)
+url_in <- "https://data.cityofnewyork.us/api/views/833y-fsy8/rows.csv?accessType=DOWNLOAD"
+NYPD_shooting_incident <- read_csv(url_in)
+summary(NYPD_shooting_incident)
+```
+### Step 2. Tidy and transform data
+1.Getting rid of the columns I do not need for analysis.
+
+2.Changing appropriate variables to factor and date types.
+
+3.Add a new column which is named year, which count shooting incidents by year,I will use this data for my further study.
+```{r}
+shooting_historic <- NYPD_shooting_incident %>%
+                     select(-c(PRECINCT,JURISDICTION_CODE,X_COORD_CD,Y_COORD_CD,
+                            LOCATION_DESC,Latitude,Longitude,Lon_Lat))%>%
+                     mutate(BORO=factor(BORO),STATISTICAL_MURDER_FLAG=factor(STATISTICAL_MURDER_FLAG),
+                     PERP_AGE_GROUP=factor(PERP_AGE_GROUP),PERP_RACE=factor(PERP_RACE),
+                     PERP_SEX=factor(PERP_SEX),VIC_AGE_GROUP=factor(VIC_AGE_GROUP),
+                     VIC_SEX=factor(VIC_SEX), VIC_RACE=factor(VIC_RACE),
+                     OCCUR_DATE=mdy(OCCUR_DATE),OCCUR_TIME=hms(OCCUR_TIME), YEAR=year(OCCUR_DATE))
+summary(shooting_historic)
+```
+4.Combining all missing data to one group which is named unknown.
+```{r}
+shooting_historic$PERP_AGE_GROUP[is.na(shooting_historic$PERP_AGE_GROUP)] = "UNKNOWN"
+shooting_historic$PERP_SEX[is.na(shooting_historic$PERP_SEX)] = "U"
+shooting_historic$PERP_AGE_GROUP[is.na(shooting_historic$PERP_AGE_GROUP)] = "UNKNOWN"
+summary(shooting_historic)
+```
+### Step 3. Add visualizations and analysis
+1.Total count of shooting incidents by year.
+```{r}
+total_count_by_year <- shooting_historic %>% group_by(YEAR)%>%summarize(shooting_incidents=n())
+total_count_by_year%>%
+  ggplot(aes(x=YEAR,y=shooting_incidents))+geom_line(aes(color="shooting_incidents"))+
+  coord_cartesian(xlim=c(2006,2020),ylim=c(900,2100))+geom_point()+
+  labs(title=str_c("Total shooting incidents by year"),y=NULL)
+```
+
+In this graph shows the shooting event by year, overall, by looking at the number of incidents, it is possible to conclude that shooting crime levels have been decreasing consistently since 2006, but in incredible sharply increasing in 2020.
+
+2.Distribution of shooting incidents in each borough by year.
+```{r}
+total_count_by_year_boro <- shooting_historic %>% count(YEAR, BORO)
+total_count_by_year_boro%>%
+ggplot(aes(x=YEAR, y=n, colour=BORO)) + geom_line() + geom_point()
+```
+According to this visualization, Brooklyn has the overall highest number of shooting incidents, and Staten island has the lowest number.
+
+
+3.Victims by gender and age group and race.
+```{r}
+ggplot(data = shooting_historic) +geom_bar(aes(x = VIC_SEX))
+ggplot(data = shooting_historic) +geom_bar(aes(x = VIC_AGE_GROUP))
+ggplot(data = shooting_historic) +geom_bar(aes(x = VIC_RACE))
+```
+I have found the following insights: Most of the victims are male.  Ages between 25-44 males are at high risk of being involved in shooting incidents.  Black residents are most experienced in a shooting incident compared to any other race.
+
+4.Modeling Data
+```{r}
+fixed_YEAR <- total_count_by_year$YEAR-min(total_count_by_year$YEAR)
+linear_model <- lm(shooting_incidents ~ fixed_YEAR, data=total_count_by_year)
+summary(linear_model)
+total_count_by_year %>% mutate(pred=predict(linear_model))%>%
+  ggplot()+geom_line(aes(x=YEAR,y=pred),color="red")+
+  geom_point(aes(x=YEAR,y=shooting_incidents),color="blue")
+```
+I use a linear model to discuss the relationship between shooting incidents and year, the red line is my prediction,and blue dots are actuals data, we can see the model does a reasonably good job for predicting, but at end there is a outlier extremely high, as we know, COVID19 pandemic occured around same time, we need more data to analysis the relationship between shooting incidents and COVID19 effects. 
+
+## Step 4. Conclusion and add bias identification
+By using tidyverse and lubridate, I analyzed and visualized the open data of NYPD shooting incidents historic. According to these visualizations, the level of shooting crimes increased significantly from 2019,after this, I am going to look into more recent data and try different libraries for data visualization.
+There are some missing data in datasets, missing data can result in information bias, in the beginning I want to remove those missing data, but when I notice these are a high percentage of missing data especially in perp age group and perp sex and perp race, I decide to combine those missing data to an unknown category. 
+This is my conclusion of NYPD Shooting Incident Data (Historic) and how I mitigate bias, thanks for your reading.
